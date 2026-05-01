@@ -34,8 +34,9 @@ export async function* generate(
   ]);
 
   const rows = parseSurveyRows(content, mediaFiles);
-  const targetSet = new Set(questionNames.length > 0 ? questionNames : rows.map((r) => r.name));
-  const targets = rows.filter((r) => targetSet.has(r.name));
+  const audioRows = rows.filter((r) => !r.isGroup);
+  const targetSet = new Set(questionNames.length > 0 ? questionNames : audioRows.map((r) => r.name));
+  const targets = audioRows.filter((r) => targetSet.has(r.name));
 
   const updatedContent: KoboFormContent = {
     ...content,
@@ -44,7 +45,7 @@ export async function* generate(
   };
 
   // Build isoList once — same logic as parseSurveyRows
-  const isoList = rows[0]?.languages.map((l) => l.iso) ?? [""];
+  const isoList = audioRows[0]?.languages.map((l) => l.iso) ?? [""];
 
   for (const row of targets) {
     let anyGenerated = false;
@@ -94,9 +95,9 @@ export async function* generate(
     }
   }
 
-  // Step 4: patch form with all updates at once; returns the new version_id
   const newVersionId = await patchFormContent(serverUrl, assetUid, koboToken, updatedContent);
 
-  // Step 5: redeploy using the version_id from the patch response
-  await redeployForm(serverUrl, assetUid, koboToken, newVersionId);
+  if (req.redeploy) {
+    await redeployForm(serverUrl, assetUid, koboToken, newVersionId);
+  }
 }

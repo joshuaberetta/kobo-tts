@@ -1,6 +1,7 @@
 import { preview, generate } from "./pipeline";
+import { translate } from "./translate";
 import { renderUI } from "./ui";
-import type { Env, GenerateRequest, PreviewRequest } from "./types";
+import type { Env, GenerateRequest, PreviewRequest, TranslateRequest } from "./types";
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -56,6 +57,43 @@ export default {
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           await writer.write(encoder.encode(`data: ${JSON.stringify({ question: "__pipeline__", status: "error", message: msg })}\n\n`));
+        } finally {
+          await writer.close();
+        }
+      })();
+
+      return new Response(readable, {
+        headers: {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+        },
+      });
+    }
+
+    if (url.pathname === "/translate" && request.method === "POST") {
+      let body: TranslateRequest;
+      try {
+        body = await request.json() as TranslateRequest;
+      } catch {
+        return new Response("Invalid JSON", { status: 400 });
+      }
+      const { koboToken, serverUrl, assetUid, targetIso, targetLangLabel } = body;
+      if (!koboToken || !serverUrl || !assetUid || !targetIso || !targetLangLabel) {
+        return new Response("Missing required fields", { status: 400 });
+      }
+
+      const { readable, writable } = new TransformStream();
+      const writer = writable.getWriter();
+      const encoder = new TextEncoder();
+
+      (async () => {
+        try {
+          for await (const result of translate(body, env.OPENAI_API_KEY)) {
+            await writer.write(encoder.encode(`data: ${JSON.stringify(result)}\n\n`));
+          }
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          await writer.write(encoder.encode(`data: ${JSON.stringify({ item: "__pipeline__", status: "error", message: msg })}\n\n`));
         } finally {
           await writer.close();
         }

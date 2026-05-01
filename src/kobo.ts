@@ -1,4 +1,5 @@
 import type {
+  ChoiceEntry,
   KoboFormContent,
   KoboMediaFile,
   KoboMediaListResponse,
@@ -122,14 +123,25 @@ export function parseSurveyRows(
     typeof t === "string" ? (t.match(/\(([a-z]{2,3})\)$/i)?.[1] ?? "") : ""
   );
 
-  const skippedTypes = new Set(["begin_group", "end_group", "begin_repeat", "end_repeat", "note"]);
+  // Build a lookup from list_name → choices
+  const choicesByList = new Map<string, { name: string; label: (string | null)[] }[]>();
+  for (const choice of content.choices ?? []) {
+    if (!choicesByList.has(choice.list_name)) choicesByList.set(choice.list_name, []);
+    choicesByList.get(choice.list_name)!.push({ name: choice.name, label: choice.label ?? [] });
+  }
+
+  const skippedTypes = new Set(["end_group", "end_repeat", "note"]);
+  const groupTypes = new Set(["begin_group", "begin_repeat"]);
 
   return content.survey
-    .filter((row: RawSurveyRow) => !skippedTypes.has(row.type))
+    .filter((row: RawSurveyRow) => !skippedTypes.has(row.type) && row.name !== undefined)
     .map((row: RawSurveyRow): SurveyRow => {
+      const name = row.name!;
+      const isGroup = groupTypes.has(row.type);
+
       const languages: LanguageEntry[] = isoList.map((iso, i) => {
-        const filename = iso ? `${row.name}_audio_${iso}.mp3` : `${row.name}_audio.mp3`;
-        const audioUid = audioMap.get(filename);
+        const filename = iso ? `${name}_audio_${iso}.mp3` : `${name}_audio.mp3`;
+        const audioUid = isGroup ? undefined : audioMap.get(filename);
         return {
           iso,
           label: row.label?.[i] ?? "",
@@ -138,7 +150,17 @@ export function parseSurveyRows(
           audioFileUid: audioUid,
         };
       });
-      return { name: row.name, type: row.type, languages };
+
+      let choices: ChoiceEntry[] | undefined;
+      if (!isGroup && row.select_from_list_name) {
+        const rawChoices = choicesByList.get(row.select_from_list_name) ?? [];
+        choices = rawChoices.map((c) => ({
+          name: c.name,
+          labels: isoList.map((iso, i) => ({ iso, label: c.label[i] ?? "" })),
+        }));
+      }
+
+      return { name, type: row.type, languages, choices, isGroup: isGroup || undefined };
     });
 }
 
