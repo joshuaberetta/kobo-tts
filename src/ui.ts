@@ -5,209 +5,87 @@ export function renderUI(): string {
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>KoboTTS</title>
-<style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: system-ui, sans-serif; background: #f5f5f5; color: #1a1a1a; padding: 2rem; }
-  h1 { font-size: 1.5rem; margin-bottom: 1.5rem; }
-  .card { background: #fff; border-radius: 8px; padding: 1.5rem; box-shadow: 0 1px 4px rgba(0,0,0,.08); margin-bottom: 1.5rem; }
-  .card h2 { font-size: 1rem; margin-bottom: 1rem; color: #555; text-transform: uppercase; letter-spacing: .05em; }
-  .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-  .field { display: flex; flex-direction: column; gap: .3rem; }
-  .field.full { grid-column: 1 / -1; }
-  label { font-size: .85rem; font-weight: 500; color: #444; }
-  input, select { padding: .5rem .75rem; border: 1px solid #d1d5db; border-radius: 6px; font-size: .95rem; width: 100%; }
-  input:focus, select:focus { outline: 2px solid #2563eb; outline-offset: 1px; border-color: transparent; }
-  .server-row { display: flex; gap: .5rem; }
-  .server-row select { flex: 0 0 auto; width: auto; }
-  .server-row input { flex: 1; }
-  .actions { display: flex; gap: .75rem; margin-top: 1rem; }
-  button { padding: .55rem 1.25rem; border: none; border-radius: 6px; font-size: .95rem; font-weight: 500; cursor: pointer; }
-  #btn-load { background: #2563eb; color: #fff; }
-  #btn-load:hover { background: #1d4ed8; }
-  #btn-load:disabled { background: #93c5fd; cursor: default; }
-  #btn-generate { background: #16a34a; color: #fff; display: none; }
-  #btn-generate:hover { background: #15803d; }
-  #btn-generate:disabled { background: #86efac; cursor: default; }
-  table { width: 100%; border-collapse: collapse; font-size: .9rem; }
-  th { text-align: left; padding: .5rem .75rem; background: #f9fafb; border-bottom: 2px solid #e5e7eb; font-size: .8rem; color: #6b7280; text-transform: uppercase; }
-  td { padding: .5rem .75rem; border-bottom: 1px solid #f3f4f6; vertical-align: top; }
-  tr:hover td { background: #fafafa; }
-  .badge { display: inline-block; padding: .15rem .5rem; border-radius: 99px; font-size: .78rem; font-weight: 500; }
-  .badge-has { background: #dcfce7; color: #166534; }
-  .badge-none { background: #f3f4f6; color: #6b7280; }
-  .badge-ok { background: #dcfce7; color: #166534; }
-  .badge-err { background: #fee2e2; color: #991b1b; }
-  .badge-skip { background: #fef9c3; color: #854d0e; }
-  #log { font-family: monospace; font-size: .85rem; background: #1e1e1e; color: #d4d4d4; padding: 1rem; border-radius: 6px; max-height: 260px; overflow-y: auto; white-space: pre-wrap; display: none; margin-top: 1rem; }
-  #table-section { display: none; }
-  #error-banner { background: #fee2e2; color: #991b1b; padding: .75rem 1rem; border-radius: 6px; margin-top: 1rem; display: none; font-size: .9rem; }
-</style>
+<link rel="stylesheet" href="https://unpkg.com/@mantine/core@7/styles.css" />
 </head>
 <body>
-<h1>KoboTTS — Audio Generator</h1>
+<div id="root"></div>
+<script type="module">
+import { createElement as h, useState, useRef, useEffect } from 'https://esm.sh/react@18';
+import { createRoot } from 'https://esm.sh/react-dom@18/client';
+import {
+  MantineProvider, Container, Title, Paper, Stack, Group,
+  TextInput, PasswordInput, Select, Button, Checkbox, Table,
+  Badge, Text, Alert, Code
+} from 'https://esm.sh/@mantine/core@7?deps=react@18,react-dom@18';
 
-<div class="card">
-  <h2>Connection</h2>
-  <div class="fields">
-    <div class="field full">
-      <label for="token">Kobo API Token</label>
-      <input type="password" id="token" placeholder="Your Kobo API token" autocomplete="off" />
-    </div>
-    <div class="field full">
-      <label for="server-preset">Server</label>
-      <div class="server-row">
-        <select id="server-preset">
-          <option value="https://kf.kobotoolbox.org">Global</option>
-          <option value="https://eu.kobotoolbox.org">EU</option>
-          <option value="custom">Other…</option>
-        </select>
-        <input type="text" id="server-custom" placeholder="https://your-kobo-server.org" style="display:none" />
-      </div>
-    </div>
-    <div class="field full">
-      <label for="asset-uid">Project UID</label>
-      <input type="text" id="asset-uid" placeholder="aXXXXXXXXXXXXX" />
-    </div>
-    <div class="field">
-      <label for="voice">Voice</label>
-      <select id="voice">
-        <option value="alloy">Alloy</option>
-        <option value="echo">Echo</option>
-        <option value="fable">Fable</option>
-        <option value="onyx">Onyx</option>
-        <option value="nova">Nova</option>
-        <option value="shimmer">Shimmer</option>
-      </select>
-    </div>
-  </div>
-  <div class="actions">
-    <button id="btn-load">Load Questions</button>
-  </div>
-  <div id="error-banner"></div>
-</div>
-
-<div id="table-section" class="card">
-  <h2>Questions</h2>
-  <table>
-    <thead>
-      <tr>
-        <th><input type="checkbox" id="chk-all" checked title="Select all" /></th>
-        <th>Name</th>
-        <th>Label</th>
-        <th>Hint</th>
-        <th>Audio</th>
-      </tr>
-    </thead>
-    <tbody id="question-tbody"></tbody>
-  </table>
-  <div class="actions">
-    <button id="btn-generate">Generate Audio</button>
-  </div>
-  <div id="log"></div>
-</div>
-
-<script>
-(function () {
-  const $ = (id) => document.getElementById(id);
-
-  // Server preset / custom toggle
-  $('server-preset').addEventListener('change', () => {
-    const custom = $('server-custom');
-    custom.style.display = $('server-preset').value === 'custom' ? 'block' : 'none';
-  });
+function App() {
+  const [token, setToken] = useState('');
+  const [serverPreset, setServerPreset] = useState('https://kf.kobotoolbox.org');
+  const [serverCustom, setServerCustom] = useState('');
+  const [assetUid, setAssetUid] = useState('');
+  const [voice, setVoice] = useState('alloy');
+  const [rows, setRows] = useState(null);
+  const [selected, setSelected] = useState(new Set());
+  const [loadingQuestions, setLoadingQuestions] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [error, setError] = useState('');
+  const [logLines, setLogLines] = useState([]);
+  const [audioStatus, setAudioStatus] = useState({});
+  const logRef = useRef(null);
 
   function getServerUrl() {
-    const preset = $('server-preset').value;
-    return preset === 'custom' ? $('server-custom').value.trim().replace(/\\/$/, '') : preset;
+    return serverPreset === 'custom'
+      ? serverCustom.trim().replace(/\\/$/, '')
+      : serverPreset;
   }
 
-  // Select-all checkbox
-  $('chk-all').addEventListener('change', (e) => {
-    document.querySelectorAll('.chk-row').forEach((c) => (c.checked = e.target.checked));
-  });
+  useEffect(() => {
+    if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
+  }, [logLines]);
 
-  function showError(msg) {
-    const el = $('error-banner');
-    el.textContent = msg;
-    el.style.display = 'block';
-  }
-  function clearError() { $('error-banner').style.display = 'none'; }
-
-  // Load Questions
-  $('btn-load').addEventListener('click', async () => {
-    clearError();
-    const token = $('token').value.trim();
-    const assetUid = $('asset-uid').value.trim();
-    const serverUrl = getServerUrl();
-    if (!token || !assetUid || !serverUrl) { showError('Please fill in all connection fields.'); return; }
-
-    $('btn-load').disabled = true;
-    $('btn-load').textContent = 'Loading…';
+  async function loadQuestions() {
+    setError('');
+    const t = token.trim(), uid = assetUid.trim(), srv = getServerUrl();
+    if (!t || !uid || !srv) { setError('Please fill in all connection fields.'); return; }
+    setLoadingQuestions(true);
     try {
       const res = await fetch('/preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ koboToken: token, serverUrl, assetUid }),
+        body: JSON.stringify({ koboToken: t, serverUrl: srv, assetUid: uid }),
       });
-      if (!res.ok) { showError(await res.text()); return; }
-      const rows = await res.json();
-      renderTable(rows);
-      $('table-section').style.display = 'block';
-      $('btn-generate').style.display = 'inline-block';
+      if (!res.ok) { setError(await res.text()); return; }
+      const data = await res.json();
+      setRows(data);
+      setSelected(new Set(data.map(r => r.name)));
+      // audioStatus: { [name]: { [iso]: boolean } }
+      const status = {};
+      for (const r of data) {
+        status[r.name] = {};
+        for (const l of r.languages) status[r.name][l.iso] = l.hasAudio;
+      }
+      setAudioStatus(status);
     } catch (e) {
-      showError(e.message);
+      setError(e.message);
     } finally {
-      $('btn-load').disabled = false;
-      $('btn-load').textContent = 'Load Questions';
+      setLoadingQuestions(false);
     }
-  });
-
-  function renderTable(rows) {
-    const tbody = $('question-tbody');
-    tbody.innerHTML = '';
-    rows.forEach((row) => {
-      const tr = document.createElement('tr');
-      const badge = row.hasAudio
-        ? '<span class="badge badge-has">✓ has audio</span>'
-        : '<span class="badge badge-none">none</span>';
-      tr.innerHTML =
-        '<td><input type="checkbox" class="chk-row" data-name="' + row.name + '" checked /></td>' +
-        '<td><code>' + esc(row.name) + '</code></td>' +
-        '<td>' + esc(row.label) + '</td>' +
-        '<td>' + esc(row.hint) + '</td>' +
-        '<td>' + badge + '</td>';
-      tbody.appendChild(tr);
-    });
   }
 
-  function esc(s) {
-    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  }
-
-  // Generate Audio
-  $('btn-generate').addEventListener('click', async () => {
-    clearError();
-    const token = $('token').value.trim();
-    const assetUid = $('asset-uid').value.trim();
-    const serverUrl = getServerUrl();
-    const voice = $('voice').value;
-    const selected = [...document.querySelectorAll('.chk-row:checked')].map((c) => c.dataset.name);
-    if (selected.length === 0) { showError('Select at least one question.'); return; }
-
-    $('btn-generate').disabled = true;
-    $('btn-generate').textContent = 'Generating…';
-    const log = $('log');
-    log.style.display = 'block';
-    log.textContent = '';
-
+  async function generateAudio() {
+    setError('');
+    const t = token.trim(), uid = assetUid.trim(), srv = getServerUrl();
+    const selectedNames = [...selected];
+    if (selectedNames.length === 0) { setError('Select at least one question.'); return; }
+    setGenerating(true);
+    setLogLines([]);
     try {
       const res = await fetch('/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ koboToken: token, serverUrl, assetUid, voice, questionNames: selected }),
+        body: JSON.stringify({ koboToken: t, serverUrl: srv, assetUid: uid, voice, questionNames: selectedNames }),
       });
-      if (!res.ok) { showError(await res.text()); return; }
-
+      if (!res.ok) { setError(await res.text()); return; }
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buf = '';
@@ -220,26 +98,207 @@ export function renderUI(): string {
         for (const line of lines) {
           if (!line.startsWith('data: ')) continue;
           const evt = JSON.parse(line.slice(6));
-          const icon = evt.status === 'generated' ? '✅' : evt.status === 'error' ? '❌' : '⏭';
-          log.textContent += icon + ' ' + evt.question + (evt.message ? ': ' + evt.message : '') + '\\n';
-          log.scrollTop = log.scrollHeight;
-          // update badge in table
-          const chk = document.querySelector('.chk-row[data-name="' + evt.question + '"]');
-          if (chk && evt.status === 'generated') {
-            const td = chk.closest('tr').querySelector('td:last-child');
-            td.innerHTML = '<span class="badge badge-has">✓ has audio</span>';
+          setLogLines(prev => [...prev, evt]);
+          if (evt.status === 'generated') {
+            const iso = evt.iso ?? '';
+            setAudioStatus(prev => ({
+              ...prev,
+              [evt.question]: { ...(prev[evt.question] ?? {}), [iso]: true },
+            }));
           }
         }
       }
-      log.textContent += '\\nDone.\\n';
+      setLogLines(prev => [...prev, { question: '', status: 'done', message: 'Done.' }]);
     } catch (e) {
-      showError(e.message);
+      setError(e.message);
     } finally {
-      $('btn-generate').disabled = false;
-      $('btn-generate').textContent = 'Generate Audio';
+      setGenerating(false);
     }
+  }
+
+  const allSelected = rows !== null && rows.length > 0 && rows.every(r => selected.has(r.name));
+  const someSelected = rows !== null && rows.some(r => selected.has(r.name)) && !allSelected;
+
+  const tableRows = rows ? rows.map(row => {
+    const isMulti = row.languages.length > 1;
+    const rowAudioStatus = audioStatus[row.name] ?? {};
+
+    const audioBadges = row.languages.map(lang =>
+      h(Badge, {
+        key: lang.iso,
+        color: rowAudioStatus[lang.iso] ? 'green' : 'gray',
+        variant: 'light',
+      }, isMulti ? (lang.iso.toUpperCase() + (rowAudioStatus[lang.iso] ? ' ✓' : ' —')) : (rowAudioStatus[lang.iso] ? '✓ has audio' : 'none'))
+    );
+
+    const labelCell = isMulti
+      ? h(Stack, { gap: 2 }, row.languages.map(lang =>
+          h(Group, { key: lang.iso, gap: 4, wrap: 'nowrap' },
+            h(Badge, { size: 'xs', variant: 'outline', color: 'gray', style: { flexShrink: 0 } }, lang.iso.toUpperCase()),
+            h(Text, { size: 'sm' }, lang.label)
+          )
+        ))
+      : h(Text, { size: 'sm' }, row.languages[0]?.label ?? '');
+
+    const hintCell = isMulti
+      ? h(Stack, { gap: 2 }, row.languages.map(lang =>
+          h(Group, { key: lang.iso, gap: 4, wrap: 'nowrap' },
+            h(Badge, { size: 'xs', variant: 'outline', color: 'gray', style: { flexShrink: 0 } }, lang.iso.toUpperCase()),
+            h(Text, { size: 'sm', c: 'dimmed' }, lang.hint)
+          )
+        ))
+      : h(Text, { size: 'sm', c: 'dimmed' }, row.languages[0]?.hint ?? '');
+
+    return h(Table.Tr, { key: row.name },
+      h(Table.Td, null,
+        h(Checkbox, {
+          checked: selected.has(row.name),
+          onChange: e => setSelected(prev => {
+            const next = new Set(prev);
+            e.target.checked ? next.add(row.name) : next.delete(row.name);
+            return next;
+          }),
+        })
+      ),
+      h(Table.Td, null, h(Code, null, row.name)),
+      h(Table.Td, null, labelCell),
+      h(Table.Td, null, hintCell),
+      h(Table.Td, null, h(Group, { gap: 4, wrap: 'wrap' }, audioBadges))
+    );
+  }) : [];
+
+  const logEntries = logLines.map((evt, i) => {
+    if (evt.status === 'done') {
+      return h(Text, { key: i, size: 'sm', ff: 'monospace', c: 'gray.4' }, evt.message || 'Done.');
+    }
+    const icon = evt.status === 'generated' ? '✅' : evt.status === 'error' ? '❌' : '⏭';
+    const c = evt.status === 'generated' ? 'green.4' : evt.status === 'error' ? 'red.4' : 'yellow.4';
+    const label = evt.iso ? evt.question + ' (' + evt.iso + ')' : evt.question;
+    return h(Text, { key: i, size: 'sm', ff: 'monospace', c },
+      icon + ' ' + label + (evt.message ? ': ' + evt.message : '')
+    );
   });
-})();
+
+  return h(Container, { size: 'md', py: 'xl' },
+    h(Title, { order: 1, mb: 'xl' }, 'KoboTTS — Audio Generator'),
+
+    h(Paper, { shadow: 'sm', p: 'lg', mb: 'lg', withBorder: true },
+      h(Title, { order: 2, size: 'h4', mb: 'md', c: 'dimmed', tt: 'uppercase' }, 'Connection'),
+      h(Stack, { gap: 'sm' },
+        h(PasswordInput, {
+          label: 'Kobo API Token',
+          placeholder: 'Your Kobo API token',
+          value: token,
+          onChange: e => setToken(e.target.value),
+          autoComplete: 'off',
+        }),
+        h(Select, {
+          label: 'Server',
+          value: serverPreset,
+          onChange: v => setServerPreset(v),
+          data: [
+            { value: 'https://kf.kobotoolbox.org', label: 'Global' },
+            { value: 'https://eu.kobotoolbox.org', label: 'EU' },
+            { value: 'custom', label: 'Other…' },
+          ],
+        }),
+        serverPreset === 'custom'
+          ? h(TextInput, {
+              placeholder: 'https://your-kobo-server.org',
+              value: serverCustom,
+              onChange: e => setServerCustom(e.target.value),
+            })
+          : null,
+        h(TextInput, {
+          label: 'Project UID',
+          placeholder: 'aXXXXXXXXXXXXX',
+          value: assetUid,
+          onChange: e => setAssetUid(e.target.value),
+        }),
+        h(Select, {
+          label: 'Voice',
+          value: voice,
+          onChange: v => setVoice(v),
+          data: [
+            { value: 'alloy', label: 'Alloy' },
+            { value: 'ash', label: 'Ash' },
+            { value: 'ballad', label: 'Ballad' },
+            { value: 'cedar', label: 'Cedar' },
+            { value: 'coral', label: 'Coral' },
+            { value: 'echo', label: 'Echo' },
+            { value: 'fable', label: 'Fable' },
+            { value: 'marin', label: 'Marin' },
+            { value: 'nova', label: 'Nova' },
+            { value: 'onyx', label: 'Onyx' },
+            { value: 'sage', label: 'Sage' },
+            { value: 'shimmer', label: 'Shimmer' },
+          ],
+        }),
+        h(Group, { mt: 'xs' },
+          h(Button, { onClick: loadQuestions, loading: loadingQuestions }, 'Load Questions')
+        ),
+        error
+          ? h(Alert, { color: 'red', title: 'Error', mt: 'xs' }, error)
+          : null
+      )
+    ),
+
+    rows !== null
+      ? h(Paper, { shadow: 'sm', p: 'lg', withBorder: true },
+          h(Title, { order: 2, size: 'h4', mb: 'md', c: 'dimmed', tt: 'uppercase' }, 'Questions'),
+          h(Table.ScrollContainer, { minWidth: 600 },
+            h(Table, { striped: true, highlightOnHover: true, withTableBorder: true, withColumnBorders: true },
+              h(Table.Thead, null,
+                h(Table.Tr, null,
+                  h(Table.Th, null,
+                    h(Checkbox, {
+                      checked: allSelected,
+                      indeterminate: someSelected,
+                      onChange: e => setSelected(
+                        e.target.checked ? new Set(rows.map(r => r.name)) : new Set()
+                      ),
+                    })
+                  ),
+                  h(Table.Th, null, 'Name'),
+                  h(Table.Th, null, 'Label'),
+                  h(Table.Th, null, 'Hint'),
+                  h(Table.Th, null, 'Audio'),
+                )
+              ),
+              h(Table.Tbody, null, tableRows)
+            )
+          ),
+          h(Group, { mt: 'md' },
+            h(Button, {
+              color: 'green',
+              onClick: generateAudio,
+              loading: generating,
+              disabled: selected.size === 0,
+            }, 'Generate Audio')
+          ),
+          logLines.length > 0
+            ? h('div', {
+                ref: logRef,
+                style: {
+                  background: '#1e1e1e',
+                  borderRadius: '6px',
+                  padding: '1rem',
+                  maxHeight: '260px',
+                  overflowY: 'auto',
+                  marginTop: '1rem',
+                },
+              },
+                h(Stack, { gap: 2 }, logEntries)
+              )
+            : null
+        )
+      : null
+  );
+}
+
+createRoot(document.getElementById('root')).render(
+  h(MantineProvider, null, h(App, null))
+);
 </script>
 </body>
 </html>`;

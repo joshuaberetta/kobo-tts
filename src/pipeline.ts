@@ -43,40 +43,54 @@ export async function* generate(
     translated: [...content.translated],
   };
 
+  // Build isoList once — same logic as parseSurveyRows
+  const isoList = rows[0]?.languages.map((l) => l.iso) ?? [""];
+
   for (const row of targets) {
-    const text = [row.label, row.hint].filter(Boolean).join(". ");
-    if (!text.trim()) {
-      yield { question: row.name, status: "skipped", message: "no label or hint text" };
-      continue;
+    let anyGenerated = false;
+
+    for (const lang of row.languages) {
+      const text = [lang.label, lang.hint].filter(Boolean).join(". ");
+      if (!text.trim()) {
+        yield { question: row.name, iso: lang.iso || undefined, status: "skipped", message: "no label or hint text" };
+        continue;
+      }
+
+      try {
+        const mp3 = await generateAudio(text, voice, openAiApiKey);
+
+        const filename = lang.iso
+          ? `${row.name}_audio_${lang.iso}.mp3`
+          : `${row.name}_audio.mp3`;
+
+        if (lang.hasAudio && lang.audioFileUid) {
+          await deleteMediaFile(serverUrl, assetUid, lang.audioFileUid, koboToken);
+        }
+        await uploadMediaFile(serverUrl, assetUid, koboToken, filename, mp3);
+
+        anyGenerated = true;
+        yield { question: row.name, iso: lang.iso || undefined, status: "generated" };
+      } catch (err) {
+        yield {
+          question: row.name,
+          iso: lang.iso || undefined,
+          status: "error",
+          message: err instanceof Error ? err.message : String(err),
+        };
+      }
     }
 
-    try {
-      // Step 2: generate audio
-      const mp3 = await generateAudio(text, voice, openAiApiKey);
-
-      // Step 3: delete existing file if present, then upload
-      const filename = `${row.name}_audio.mp3`;
-      if (row.hasAudio && row.audioFileUid) {
-        await deleteMediaFile(serverUrl, assetUid, row.audioFileUid, koboToken);
-      }
-      await uploadMediaFile(serverUrl, assetUid, koboToken, filename, mp3);
-
-      // Step 4: update the survey row in the cloned content
+    if (anyGenerated) {
+      // Update media::audio as a parallel array matching isoList
       const surveyRow = updatedContent.survey.find((s) => s.name === row.name);
       if (surveyRow) {
-        surveyRow["media::audio"] = [filename];
+        surveyRow["media::audio"] = isoList.map((iso) =>
+          iso ? `${row.name}_audio_${iso}.mp3` : `${row.name}_audio.mp3`
+        );
       }
       if (!updatedContent.translated.includes("media::audio")) {
         updatedContent.translated.push("media::audio");
       }
-
-      yield { question: row.name, status: "generated" };
-    } catch (err) {
-      yield {
-        question: row.name,
-        status: "error",
-        message: err instanceof Error ? err.message : String(err),
-      };
     }
   }
 

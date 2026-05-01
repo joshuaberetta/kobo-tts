@@ -2,6 +2,7 @@ import type {
   KoboFormContent,
   KoboMediaFile,
   KoboMediaListResponse,
+  LanguageEntry,
   RawSurveyRow,
   SurveyRow,
 } from "./types";
@@ -116,21 +117,28 @@ export function parseSurveyRows(
     audioMap.set(f.metadata.filename, f.uid);
   }
 
+  // Extract ISO codes from translations array; "" means single-language
+  const isoList = content.translations.map((t) =>
+    typeof t === "string" ? (t.match(/\(([a-z]{2,3})\)$/i)?.[1] ?? "") : ""
+  );
+
   const skippedTypes = new Set(["begin_group", "end_group", "begin_repeat", "end_repeat", "note"]);
 
   return content.survey
     .filter((row: RawSurveyRow) => !skippedTypes.has(row.type))
     .map((row: RawSurveyRow): SurveyRow => {
-      const expectedFilename = `${row.name}_audio.mp3`;
-      const audioUid = audioMap.get(expectedFilename);
-      return {
-        name: row.name,
-        type: row.type,
-        label: row.label?.[0] ?? "",
-        hint: row.hint?.[0] ?? "",
-        hasAudio: audioUid !== undefined,
-        audioFileUid: audioUid,
-      };
+      const languages: LanguageEntry[] = isoList.map((iso, i) => {
+        const filename = iso ? `${row.name}_audio_${iso}.mp3` : `${row.name}_audio.mp3`;
+        const audioUid = audioMap.get(filename);
+        return {
+          iso,
+          label: row.label?.[i] ?? "",
+          hint: row.hint?.[i] ?? "",
+          hasAudio: audioUid !== undefined,
+          audioFileUid: audioUid,
+        };
+      });
+      return { name: row.name, type: row.type, languages };
     });
 }
 

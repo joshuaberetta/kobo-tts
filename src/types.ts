@@ -2,7 +2,7 @@ export interface Env {
   OPENAI_API_KEY: string;
 }
 
-export type KoboVoice = "alloy" | "echo" | "fable" | "onyx" | "nova" | "shimmer";
+export type KoboVoice = "alloy" | "ash" | "ballad" | "cedar" | "coral" | "echo" | "fable" | "marin" | "nova" | "onyx" | "sage" | "shimmer";
 
 export interface PreviewRequest {
   koboToken: string;
@@ -18,13 +18,18 @@ export interface GenerateRequest {
   questionNames: string[]; // subset selected in UI; empty = all
 }
 
-export interface SurveyRow {
-  name: string;
-  type: string;
+export interface LanguageEntry {
+  iso: string;        // e.g. "en", "es"; "" for single-language forms
   label: string;
   hint: string;
   hasAudio: boolean;
   audioFileUid?: string;
+}
+
+export interface SurveyRow {
+  name: string;
+  type: string;
+  languages: LanguageEntry[];
 }
 
 export interface KoboFormContent {
@@ -54,6 +59,7 @@ export interface KoboMediaListResponse {
 
 export interface GenerateResult {
   question: string;
+  iso?: string;
   status: "generated" | "skipped" | "error";
   message?: string;
 }
